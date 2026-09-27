@@ -1,4 +1,4 @@
-name: CI - Monitoring Stack
+name: ML Monitoring CI Pipeline
 
 on:
   push:
@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  validate:
-    name: Validate configuration and alert flow
+  code-quality:
+    name: Code Quality Check
     runs-on: ubuntu-latest
 
     steps:
@@ -52,6 +52,20 @@ jobs:
 
       - name: Compile Airflow DAG and alert receiver
         run: python -m compileall -q airflow_dags alert_receiver
+
+  run-unit-tests:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
       - name: Smoke test alert receiver
         run: |
@@ -116,3 +130,45 @@ jobs:
         run: |
           docker build --tag ml-monitoring-airflow-ci ./airflow
           docker build --tag ml-monitoring-alert-receiver-ci ./alert_receiver
+
+      - name: Create CI validation report
+        if: always()
+        run: |
+          {
+            echo "ML Monitoring CI validation report"
+            echo "Commit: $GITHUB_SHA"
+            echo "Workflow: $GITHUB_WORKFLOW"
+            echo "Result: ${{ job.status }}"
+          } > ci-validation-report.txt
+
+      - name: Upload CI validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-validation-report
+          path: ci-validation-report.txt
+          if-no-files-found: error
+
+  build-summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [code-quality, run-unit-tests]
+    if: always()
+
+    steps:
+      - name: Print pipeline result
+        run: |
+          echo "Code Quality Check: ${{ needs.code-quality.result }}"
+          echo "Run Unit Tests: ${{ needs.run-unit-tests.result }}"
+
+          if [ "${{ needs.code-quality.result }}" = "success" ] && \
+             [ "${{ needs.run-unit-tests.result }}" = "success" ]; then
+            echo "================================"
+            echo " CI PIPELINE PASSED!"
+            echo " Airflow and alerting configuration are validated."
+            echo "================================"
+            exit 0
+          fi
+
+          echo "::error::CI pipeline failed. Review the failed job logs above."
+          exit 1
