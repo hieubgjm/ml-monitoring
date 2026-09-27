@@ -1,0 +1,15 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: local-alert-receiver
+  group_by: [alertname, component, dag_id, task_id]
+  group_wait: 0s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: local-alert-receiver
+    webhook_configs:
+      - url: http://alert-receiver:8085/alerts
+        send_resolved: true

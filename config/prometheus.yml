@@ -1,0 +1,108 @@
+# ============================================
+# PROMETHEUS CONFIGURATION
+# ============================================
+
+global:
+  scrape_interval: 15s      # Scrape targets every 15 seconds
+  evaluation_interval: 15s  # Evaluate rules every 15 seconds
+  
+  # Attach these labels to any time series or alerts
+  external_labels:
+    cluster: 'production'
+    env: 'ml-monitoring'
+
+# Alertmanager receives Prometheus rule alerts. Airflow task failures are also
+# sent directly from the DAG failure callback for immediate notification.
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "/etc/prometheus/rules/evidently_alerts.yml"
+  - "/etc/prometheus/rules/airflow_alerts.yml"
+
+# Scrape configurations
+scrape_configs:
+  # ==========================================
+  # PROMETHEUS SELF-MONITORING
+  # ==========================================
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
+  # ==========================================
+  # FASTAPI MODEL SERVING API
+  # ==========================================
+  - job_name: 'model-api'
+    metrics_path: '/metrics'
+    scrape_interval: 10s  # More frequent for API
+    static_configs:
+      - targets: ['api:8000']
+        labels:
+          service: 'model-api'
+          application: 'ml-serving'
+    
+    # Optional: Relabel metrics
+    metric_relabel_configs:
+      # Keep only specific metrics (optional)
+      # - source_labels: [__name__]
+      #   regex: 'api_.*|model_.*'
+      #   action: keep
+
+  # ==========================================
+  # EVIDENTLY AI - DRIFT DETECTION
+  # ==========================================
+  - job_name: 'evidently'
+    metrics_path: '/metrics'
+    scrape_interval: 30s  # Drift metrics don't change as frequently
+    static_configs:
+      - targets: ['evidently:8001']
+        labels:
+          service: 'evidently'
+          application: 'drift-detection'
+
+  # ==========================================
+  # MLFLOW TRACKING SERVER
+  # ==========================================
+  # Note: MLFlow doesn't expose Prometheus metrics by default
+  # You need to add prometheus-flask-exporter
+  # - job_name: 'mlflow'
+  #   static_configs:
+  #     - targets: ['mlflow:5000']
+  #       labels:
+  #         service: 'mlflow'
+
+  # ==========================================
+  # AIRFLOW (via StatsD Exporter)
+  # ==========================================
+  - job_name: 'airflow-metrics'
+    static_configs:
+      - targets: ['statsd-exporter:9102']
+        labels:
+          service: 'airflow'
+          application: 'orchestration'
+
+  # ==========================================
+  # NODE EXPORTER (System Metrics)
+  # ==========================================
+  # Uncomment if you want host system metrics
+  # - job_name: 'node'
+  #   static_configs:
+  #     - targets: ['node-exporter:9100']
+  #       labels:
+  #         service: 'node-exporter'
+
+  # ==========================================
+  # CADVISOR (Container Metrics)
+  # ==========================================
+  # Uncomment if you want container metrics
+  # - job_name: 'cadvisor'
+  #   static_configs:
+  #     - targets: ['cadvisor:8080']
+  #       labels:
+  #         service: 'cadvisor'

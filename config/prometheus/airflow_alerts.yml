@@ -1,0 +1,33 @@
+groups:
+  - name: airflow_alerts
+    interval: 30s
+    rules:
+      - alert: AirflowMetricsExporterDown
+        expr: up{job="airflow-metrics"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: airflow
+        annotations:
+          summary: "Airflow metrics exporter is down"
+          description: "Prometheus cannot scrape StatsD Exporter, so Airflow metrics are unavailable."
+
+      - alert: AirflowSchedulerHeartbeatMissing
+        expr: absent_over_time(airflow_scheduler_heartbeat_total{job="airflow-metrics"}[5m])
+        for: 2m
+        labels:
+          severity: critical
+          component: airflow
+        annotations:
+          summary: "Airflow scheduler heartbeat is missing"
+          description: "No scheduler heartbeat has been observed for at least five minutes."
+
+      - alert: AirflowDagImportErrors
+        expr: airflow_dag_import_errors{job="airflow-metrics"} > 0
+        for: 2m
+        labels:
+          severity: warning
+          component: airflow
+        annotations:
+          summary: "Airflow cannot import one or more DAGs"
+          description: "Airflow reports {{ $value }} DAG import errors. Check scheduler logs."

@@ -1,0 +1,216 @@
+# ============================================
+# PROMETHEUS ALERT RULES
+# ============================================
+
+groups:
+  # ==========================================
+  # MODEL API ALERTS
+  # ==========================================
+  - name: model_api_alerts
+    interval: 30s
+    rules:
+      # High error rate
+      - alert: HighErrorRate
+        expr: |
+          rate(model_api_errors_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+
+      # High latency
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, 
+            rate(model_api_request_duration_seconds_bucket[5m])
+          ) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High API latency"
+          description: "95th percentile latency is {{ $value }}s"
+
+      # Low throughput
+      - alert: LowThroughput
+        expr: |
+          rate(model_predictions_total[5m]) < 0.1
+        for: 10m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "Low prediction throughput"
+          description: "Prediction rate is {{ $value }} per second"
+
+      # API down
+      - alert: APIDown
+        expr: up{job="fastapi_model_server"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Model API is down"
+          description: "FastAPI server has been down for more than 2 minutes"
+
+  # ==========================================
+  # MODEL PERFORMANCE ALERTS
+  # ==========================================
+  - name: model_performance_alerts
+    interval: 1m
+    rules:
+      # Prediction latency spike
+      - alert: PredictionLatencySpike
+        expr: |
+          histogram_quantile(0.99,
+            rate(model_prediction_latency_seconds_bucket[5m])
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: model
+        annotations:
+          summary: "Model prediction latency spike"
+          description: "99th percentile prediction latency is {{ $value }}s"
+
+      # Unusual prediction distribution
+      - alert: UnusualPredictionDistribution
+        expr: |
+          abs(
+            avg_over_time(model_prediction_value_sum[1h]) /
+            avg_over_time(model_prediction_value_count[1h]) -
+            avg_over_time(model_prediction_value_sum[1d] offset 1d) /
+            avg_over_time(model_prediction_value_count[1d] offset 1d)
+          ) > 2.0
+        for: 30m
+        labels:
+          severity: warning
+          component: model
+        annotations:
+          summary: "Unusual prediction distribution"
+          description: "Mean prediction value has changed significantly"
+
+  # ==========================================
+  # DATA DRIFT ALERTS (from Airflow)
+  # ==========================================
+  - name: data_drift_alerts
+    interval: 5m
+    rules:
+      # Data drift detected
+      - alert: DataDriftDetected
+        expr: |
+          model_data_drift_detected == 1
+        for: 5m
+        labels:
+          severity: warning
+          component: monitoring
+        annotations:
+          summary: "Data drift detected"
+          description: "{{ $labels.feature_name }} has drifted"
+
+      # Performance degradation
+      - alert: PerformanceDegradation
+        expr: |
+          model_accuracy < 0.85
+        for: 15m
+        labels:
+          severity: critical
+          component: model
+        annotations:
+          summary: "Model performance degraded"
+          description: "Current accuracy is {{ $value | humanizePercentage }}"
+
+  # ==========================================
+  # SYSTEM ALERTS
+  # ==========================================
+  - name: system_alerts
+    interval: 1m
+    rules:
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value | humanize }}%"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanize }}%"
+
+      # Disk space low
+      - alert: DiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} / 
+           node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Low disk space"
+          description: "Only {{ $value | humanize }}% disk space available"
+
+  # ==========================================
+  # MLFLOW ALERTS
+  # ==========================================
+  - name: mlflow_alerts
+    interval: 1m
+    rules:
+      # MLFlow server down
+      - alert: MLFlowDown
+        expr: up{job="mlflow"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: mlflow
+        annotations:
+          summary: "MLFlow server is down"
+          description: "MLFlow has been unavailable for {{ $value }} minutes"
+
+  # ==========================================
+  # AIRFLOW ALERTS
+  # ==========================================
+  - name: airflow_alerts
+    interval: 2m
+    rules:
+      # Airflow DAG failures
+      - alert: AirflowDAGFailed
+        expr: |
+          increase(airflow_dag_run_failed_total[1h]) > 3
+        for: 5m
+        labels:
+          severity: warning
+          component: airflow
+        annotations:
+          summary: "Airflow DAG failures"
+          description: "{{ $labels.dag_id }} has failed {{ $value }} times in the last hour"
+
+      # Airflow task stuck
+      - alert: AirflowTaskStuck
+        expr: |
+          airflow_task_instance_duration_seconds > 3600
+        for: 10m
+        labels:
+          severity: warning
+          component: airflow
+        annotations:
+          summary: "Airflow task stuck"
+          description: "Task {{ $labels.task_id }} has been running for over 1 hour"

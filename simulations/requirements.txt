@@ -1,0 +1,24 @@
+# Simulation Scripts Requirements
+
+# HTTP Requests
+requests==2.31.0
+httpx==0.25.2
+
+# Data Generation
+numpy==1.24.3
+pandas==2.0.3
+scikit-learn==1.3.2
+scipy==1.11.4
+
+# Progress & Logging
+tqdm==4.66.1
+colorama==0.4.6
+
+# Configuration
+python-dotenv==1.0.0
+pyyaml==6.0.1
+
+# Visualization (optional)
+matplotlib==3.8.2
+seaborn==0.13.0
+

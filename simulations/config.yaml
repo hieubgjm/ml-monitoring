@@ -1,0 +1,139 @@
+# ============================================
+# SIMULATION CONFIGURATION
+# ============================================
+
+# API Endpoints
+api:
+  prediction_url: "http://localhost:8000/predict"
+  health_url: "http://localhost:8000/health"
+  evidently_capture_url: "http://localhost:8001/capture"
+  evidently_analyze_url: "http://localhost:8001/analyze"
+
+# Model Configuration
+model:
+  name: "wine_quality_model"
+  version: "1"
+  feature_count: 13
+
+# Wine Dataset Feature Ranges (for realistic data generation)
+features:
+  fixed_acidity:
+    min: 4.6
+    max: 15.9
+    mean: 8.32
+    std: 1.74
+  volatile_acidity:
+    min: 0.12
+    max: 1.58
+    mean: 0.53
+    std: 0.18
+  citric_acid:
+    min: 0.0
+    max: 1.0
+    mean: 0.27
+    std: 0.19
+  residual_sugar:
+    min: 0.9
+    max: 15.5
+    mean: 2.54
+    std: 1.41
+  chlorides:
+    min: 0.012
+    max: 0.611
+    mean: 0.087
+    std: 0.047
+  free_sulfur_dioxide:
+    min: 1.0
+    max: 72.0
+    mean: 15.87
+    std: 10.46
+  total_sulfur_dioxide:
+    min: 6.0
+    max: 289.0
+    mean: 46.47
+    std: 32.90
+  density:
+    min: 0.99007
+    max: 1.00369
+    mean: 0.9967
+    std: 0.0019
+  pH:
+    min: 2.74
+    max: 4.01
+    mean: 3.31
+    std: 0.15
+  sulphates:
+    min: 0.33
+    max: 2.0
+    mean: 0.66
+    std: 0.17
+  alcohol:
+    min: 8.4
+    max: 14.9
+    mean: 10.42
+    std: 1.07
+  quality:
+    min: 3
+    max: 8
+    mean: 5.64
+    std: 0.81
+
+# Simulation Scenarios
+scenarios:
+  normal:
+    description: "Normal traffic without drift"
+    drift_multiplier: 1.0
+    noise_level: 0.1
+    
+  slight_drift:
+    description: "Slight drift in 2-3 features"
+    drift_multiplier: 1.2
+    noise_level: 0.15
+    affected_features: 2
+    
+  moderate_drift:
+    description: "Moderate drift in 3-5 features"
+    drift_multiplier: 1.5
+    noise_level: 0.2
+    affected_features: 4
+    
+  severe_drift:
+    description: "Severe drift in most features"
+    drift_multiplier: 2.0
+    noise_level: 0.3
+    affected_features: 7
+    
+  sudden_shift:
+    description: "Sudden distribution shift"
+    drift_multiplier: 2.5
+    noise_level: 0.4
+    affected_features: 10
+
+# Traffic Patterns
+traffic:
+  burst:
+    requests_per_second: 10
+    duration_seconds: 60
+    description: "High traffic burst"
+    
+  steady:
+    requests_per_second: 2
+    duration_seconds: 300
+    description: "Steady traffic flow"
+    
+  gradual:
+    start_rps: 1
+    end_rps: 10
+    duration_seconds: 180
+    description: "Gradually increasing traffic"
+
+# Default Settings
+defaults:
+  requests_per_second: 2
+  duration_seconds: 60
+  scenario: "normal"
+  capture_to_evidently: true
+  analyze_after_completion: true
+  show_progress: true
+  log_level: "INFO"
+

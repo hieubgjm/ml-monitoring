@@ -1,0 +1,21 @@
+# Converts selected Airflow StatsD metrics into stable, labeled Prometheus metrics.
+# The ttl values make a stopped scheduler observable through absent_over_time rules.
+mappings:
+  - match: "airflow.scheduler_heartbeat"
+    match_metric_type: counter
+    name: "airflow_scheduler_heartbeat_total"
+    ttl: 3m
+
+  - match: "airflow.ti_failures"
+    match_metric_type: counter
+    name: "airflow_task_failures_total"
+    honor_labels: true
+
+  - match: "airflow.dag.callback_exceptions"
+    match_metric_type: counter
+    name: "airflow_dag_callback_exceptions_total"
+    honor_labels: true
+
+  - match: "airflow.dag_processing.import_errors"
+    match_metric_type: gauge
+    name: "airflow_dag_import_errors"

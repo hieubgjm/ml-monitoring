@@ -1,0 +1,304 @@
+# ============================================
+# EVIDENTLY AI - DRIFT DETECTION ALERTS
+# ============================================
+
+groups:
+  # ==========================================
+  # DATA DRIFT ALERTS
+  # ==========================================
+  - name: evidently_drift_alerts
+    interval: 1m
+    rules:
+      # Basic drift detection
+      - alert: DataDriftDetected
+        expr: evidently_data_drift_detected == 1
+        for: 5m
+        labels:
+          severity: warning
+          component: evidently
+          type: drift
+        annotations:
+          summary: "Data drift detected in production"
+          description: "Drift has been detected for {{ $value }} consecutive checks. Review drift report and feature analysis."
+          dashboard: "http://localhost:3000/d/evidently-drift"
+          runbook: "Check Feature Drift Matrix in Grafana, review Evidently reports at http://localhost:8001/reports"
+
+      # Multiple features drifting (more serious)
+      - alert: MultipleDriftedFeatures
+        expr: evidently_drifted_features_count >= 3
+        for: 10m
+        labels:
+          severity: critical
+          component: evidently
+          type: drift
+        annotations:
+          summary: "Multiple features drifting: {{ $value }} features"
+          description: "{{ $value }} features are currently drifting. This indicates significant data distribution change."
+          dashboard: "http://localhost:3000/d/evidently-drift"
+          action: "Review drifted features, consider model retraining or reference data update"
+
+      # High drift score
+      - alert: HighDriftScore
+        expr: evidently_drift_score > 0.5
+        for: 15m
+        labels:
+          severity: critical
+          component: evidently
+          type: drift
+        annotations:
+          summary: "High drift score: {{ $value | humanizePercentage }}"
+          description: "Overall drift score is {{ $value | humanizePercentage }}, indicating severe distribution shift."
+          dashboard: "http://localhost:3000/d/evidently-drift"
+          action: "Immediate action required: investigate data source, update reference data, or retrain model"
+
+      # Persistent drift (for longer period)
+      - alert: PersistentDrift
+        expr: |
+          avg_over_time(evidently_data_drift_detected[1h]) > 0.8
+        for: 30m
+        labels:
+          severity: critical
+          component: evidently
+          type: drift
+        annotations:
+          summary: "Persistent drift detected for over 1 hour"
+          description: "Drift has been detected in {{ $value | humanizePercentage }} of checks in the last hour."
+          action: "Schedule model retraining, update reference dataset, or investigate data pipeline"
+
+      # Moderate drift score (warning level)
+      - alert: ModerateDriftScore
+        expr: evidently_drift_score > 0.2 and evidently_drift_score <= 0.5
+        for: 20m
+        labels:
+          severity: warning
+          component: evidently
+          type: drift
+        annotations:
+          summary: "Moderate drift detected: {{ $value | humanizePercentage }}"
+          description: "Drift score is in warning range. Monitor closely for further degradation."
+          dashboard: "http://localhost:3000/d/evidently-drift"
+
+  # ==========================================
+  # DATA QUALITY ALERTS
+  # ==========================================
+  - name: evidently_data_quality_alerts
+    interval: 2m
+    rules:
+      # High missing values
+      - alert: HighMissingValues
+        expr: evidently_missing_values_ratio > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          component: evidently
+          type: data_quality
+        annotations:
+          summary: "High missing values in feature {{ $labels.feature_name }}"
+          description: "Feature {{ $labels.feature_name }} has {{ $value | humanizePercentage }} missing values."
+          action: "Check data pipeline, validate data source"
+
+      # Critical missing values
+      - alert: CriticalMissingValues
+        expr: evidently_missing_values_ratio > 0.5
+        for: 5m
+        labels:
+          severity: critical
+          component: evidently
+          type: data_quality
+        annotations:
+          summary: "Critical missing values in {{ $labels.feature_name }}: {{ $value | humanizePercentage }}"
+          description: "Over 50% missing values detected. Data quality compromised."
+          action: "Immediate investigation required. Check data ingestion pipeline."
+
+      # Multiple features with missing values
+      - alert: MultipleFeaturesMissingValues
+        expr: |
+          count(evidently_missing_values_ratio > 0.1) >= 3
+        for: 10m
+        labels:
+          severity: warning
+          component: evidently
+          type: data_quality
+        annotations:
+          summary: "{{ $value }} features have significant missing values"
+          description: "Multiple features showing data quality issues."
+          action: "Review data pipeline health, check upstream data sources"
+
+  # ==========================================
+  # ANALYSIS PERFORMANCE ALERTS
+  # ==========================================
+  - name: evidently_performance_alerts
+    interval: 2m
+    rules:
+      # Slow analysis
+      - alert: SlowDriftAnalysis
+        expr: |
+          histogram_quantile(0.95, 
+            rate(evidently_analysis_duration_seconds_bucket[5m])
+          ) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: evidently
+          type: performance
+        annotations:
+          summary: "Drift analysis is slow: {{ $value }}s (p95)"
+          description: "95th percentile analysis time exceeds 10 seconds."
+          action: "Check Evidently service performance, consider optimizing sample size"
+
+      # Very slow analysis
+      - alert: VerySlowDriftAnalysis
+        expr: |
+          histogram_quantile(0.95, 
+            rate(evidently_analysis_duration_seconds_bucket[5m])
+          ) > 30
+        for: 5m
+        labels:
+          severity: critical
+          component: evidently
+          type: performance
+        annotations:
+          summary: "Critical: Analysis taking {{ $value }}s"
+          description: "Drift analysis performance severely degraded."
+          action: "Immediate action: reduce sample size, check system resources, review logs"
+
+      # No recent analysis
+      - alert: NoRecentAnalysis
+        expr: |
+          time() - (evidently_analysis_total * 0 + time()) > 3600
+        for: 10m
+        labels:
+          severity: warning
+          component: evidently
+          type: availability
+        annotations:
+          summary: "No drift analysis in last hour"
+          description: "Drift detection may not be running. Last analysis was over 1 hour ago."
+          action: "Check if analysis schedule is running, verify Evidently service health"
+
+      # Analysis rate too low
+      - alert: LowAnalysisRate
+        expr: |
+          rate(evidently_analysis_total[15m]) * 3600 < 0.5
+        for: 30m
+        labels:
+          severity: warning
+          component: evidently
+          type: performance
+        annotations:
+          summary: "Analysis rate is too low"
+          description: "Less than 1 analysis per 2 hours. Expected more frequent monitoring."
+          action: "Check analysis schedule, verify data capture is working"
+
+  # ==========================================
+  # SERVICE HEALTH ALERTS
+  # ==========================================
+  - name: evidently_service_alerts
+    interval: 1m
+    rules:
+      # Evidently service down
+      - alert: EvidentlyServiceDown
+        expr: up{job="evidently"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: evidently
+          type: availability
+        annotations:
+          summary: "Evidently service is down"
+          description: "Cannot reach Evidently drift detection service."
+          action: "Check service status: docker-compose ps evidently, review logs: docker-compose logs evidently"
+
+      # Evidently service restarted
+      - alert: EvidentlyServiceRestarted
+        expr: |
+          time() - process_start_time_seconds{job="evidently"} < 300
+        labels:
+          severity: info
+          component: evidently
+          type: availability
+        annotations:
+          summary: "Evidently service recently restarted"
+          description: "Service was restarted {{ $value | humanizeDuration }} ago."
+          action: "Verify restart was planned, check logs for errors"
+
+  # ==========================================
+  # TREND-BASED ALERTS
+  # ==========================================
+  - name: evidently_trend_alerts
+    interval: 5m
+    rules:
+      # Increasing drift trend
+      - alert: IncreasingDriftTrend
+        expr: |
+          (
+            avg_over_time(evidently_drift_score[1h]) - 
+            avg_over_time(evidently_drift_score[1h] offset 1h)
+          ) > 0.1
+        for: 15m
+        labels:
+          severity: warning
+          component: evidently
+          type: trend
+        annotations:
+          summary: "Drift score increasing: +{{ $value | humanizePercentage }} in last hour"
+          description: "Drift score is trending upward. May indicate degrading data quality."
+          action: "Monitor closely, prepare for potential model update"
+
+      # Sudden spike in drifted features
+      - alert: DriftedFeaturesSpike
+        expr: |
+          (
+            evidently_drifted_features_count - 
+            avg_over_time(evidently_drifted_features_count[30m] offset 30m)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: evidently
+          type: trend
+        annotations:
+          summary: "Sudden increase in drifted features"
+          description: "{{ $value }} more features drifting compared to 30 minutes ago."
+          action: "Investigate recent changes in data pipeline or feature engineering"
+
+  # ==========================================
+  # COMPOSITE ALERTS (Multiple conditions)
+  # ==========================================
+  - name: evidently_composite_alerts
+    interval: 3m
+    rules:
+      # Critical situation: High drift + poor data quality
+      - alert: CriticalDataCondition
+        expr: |
+          evidently_drift_score > 0.3 
+          and 
+          count(evidently_missing_values_ratio > 0.1) >= 2
+        for: 10m
+        labels:
+          severity: critical
+          component: evidently
+          type: composite
+        annotations:
+          summary: "Critical: High drift AND data quality issues"
+          description: "Both drift ({{ $value | humanizePercentage }}) and data quality problems detected."
+          action: "URGENT: Stop predictions if accuracy is critical. Investigate data source immediately."
+
+      # Model health degrading
+      - alert: ModelHealthDegrading
+        expr: |
+          evidently_data_drift_detected == 1
+          and
+          evidently_drifted_features_count >= 2
+          and
+          evidently_drift_score > 0.15
+        for: 20m
+        labels:
+          severity: warning
+          component: evidently
+          type: composite
+        annotations:
+          summary: "Model health degrading: drift in {{ $value }} features"
+          description: "Multiple indicators suggest model performance may be degrading."
+          action: "Plan model retraining, update monitoring, notify ML team"
+
